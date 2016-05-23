@@ -10,6 +10,154 @@ angular.module('ngCordova', [
   'ngCordova.plugins'
 ]);
 
+// install   :      cordova plugin add https://github.com/EddyVerbruggen/cordova-plugin-3dtouch.git
+// link      :      https://github.com/EddyVerbruggen/cordova-plugin-3dtouch
+
+angular.module('ngCordova.plugins.3dtouch', [])
+
+    .factory('$cordova3DTouch', ['$q', function($q) {
+        var quickActions = [];
+        var quickActionHandler = {};
+
+        var createQuickActionHandler = function(quickActionHandler) {
+            return function (payload) {
+                for (var key in quickActionHandler) {
+                    if (payload.type === key) {
+                        quickActionHandler[key]();
+                    }
+                }
+            };
+        };
+
+        return {
+            /*
+             * Checks if Cordova 3D touch is present and loaded
+             *
+             * @return   promise
+             */
+            isAvailable: function () {
+                var deferred = $q.defer();
+                if (!window.cordova) {
+                    deferred.reject('Not supported in browser');
+                } else {
+                    if (!window.ThreeDeeTouch) {
+                        deferred.reject('Could not find 3D touch plugin');
+                    } else {
+                        window.ThreeDeeTouch.isAvailable(function (value) {
+                            deferred.resolve(value);
+                        }, function (err) {
+                            deferred.reject(err);
+                        });
+                    }
+                }
+
+                return deferred.promise;
+            },
+
+            /*
+             * Add a quick action to menu
+             *
+             * @param    string type
+             * @param    string title
+             * @param    string iconType (optional)
+             * @param    string subtitle (optional)
+             * @param    function callback (optional)
+             * @return   promise
+             */
+            addQuickAction: function(type, title, iconType, iconTemplate, subtitle, callback) {
+                var deferred = $q.defer();
+
+                var quickAction = {
+                    type: type,
+                    title: title,
+                    subtitle: subtitle
+                };
+
+                if (iconType) {
+                    quickAction.iconType = iconType;
+                }
+
+                if (iconTemplate) {
+                    quickAction.iconTemplate = iconTemplate;
+                }
+
+                this.isAvailable().then(function() {
+                    quickActions.push(quickAction);
+                    quickActionHandler[type] = callback;
+                    window.ThreeDeeTouch.configureQuickActions(quickActions);
+                    window.ThreeDeeTouch.onHomeIconPressed = createQuickActionHandler(quickActionHandler);
+                    deferred.resolve(quickActions);
+                },
+                function(err) {
+                    deferred.reject(err);
+                });
+
+                return deferred.promise;
+            },
+
+            /*
+             * Add a quick action handler. Used for static quick actions
+             *
+             * @param    string type
+             * @param    function callback
+             * @return   promise
+             */
+            addQuickActionHandler: function(type, callback) {
+                var deferred = $q.defer();
+
+                this.isAvailable().then(function() {
+                    quickActionHandler[type] = callback;
+                    window.ThreeDeeTouch.onHomeIconPressed = createQuickActionHandler(quickActionHandler);
+                    deferred.resolve(true);
+                },
+                function(err) {
+                    deferred.reject(err);
+                });
+
+                return deferred.promise;
+            },
+
+            /*
+             * Enable link preview popup when force touch is appled to link elements
+             *
+             * @return   bool
+             */
+            enableLinkPreview: function() {
+                var deferred = $q.defer();
+
+                this.isAvailable().then(function() {
+                    window.ThreeDeeTouch.enableLinkPreview();
+                        deferred.resolve(true);
+                },
+                function(err) {
+                    deferred.reject(err);
+                });
+
+                return deferred.promise;
+            },
+
+            /*
+             * Add a hanlder function for force touch events,
+             *
+             * @param    function callback
+             * @return   promise
+             */
+            addForceTouchHandler: function(callback) {
+                var deferred = $q.defer();
+
+                this.isAvailable().then(function() {
+                    window.ThreeDeeTouch.watchForceTouches(callback);
+                    deferred.resolve(true);
+                },
+                function(err) {
+                    deferred.reject(err);
+                });
+
+                return deferred.promise;
+            }
+        };
+    }]);
+
 // install  :     cordova plugin add https://github.com/EddyVerbruggen/cordova-plugin-actionsheet.git
 // link     :     https://github.com/EddyVerbruggen/cordova-plugin-actionsheet
 
@@ -172,6 +320,7 @@ angular.module('ngCordova.plugins.appRate', [])
       *
       * @param {Object} customObj
       * @param {string} customObj.title
+      * @param {string} customObj.message
       * @param {string} customObj.cancelButtonLabel
       * @param {string} customObj.laterButtonLabel
       * @param {string} customObj.rateButtonLabel
@@ -209,13 +358,11 @@ angular.module('ngCordova.plugins.appRate', [])
         },
 
         onButtonClicked: function (cb) {
-          AppRate.onButtonClicked = function (buttonIndex) {
-            cb.call(this, buttonIndex);
-          };
+          AppRate.preferences.callbacks.onButtonClicked = cb.bind(this);
         },
 
         onRateDialogShow: function (cb) {
-          AppRate.onRateDialogShow = cb();
+          AppRate.preferences.callbacks.onRateDialogShow = cb.bind(this);
         }
       };
     }];
@@ -3789,8 +3936,13 @@ angular.module('ngCordova.plugins.googleAnalytics', [])
 
       addCustomDimension: function (key, value) {
         var d = $q.defer();
+        var parsedKey = parseInt(key, 10);
 
-        $window.analytics.addCustomDimension(key, value, function () {
+        if (isNaN(parsedKey)) {
+          d.reject('Parameter "key" must be an integer.');
+        }
+
+        $window.analytics.addCustomDimension(parsedKey, value, function () {
           d.resolve();
         }, function (error) {
           d.reject(error);
@@ -5518,6 +5670,7 @@ angular.module('ngCordova.plugins.mobfoxAds', [])
   }]);
 
 angular.module('ngCordova.plugins', [
+  'ngCordova.plugins.3dtouch',
   'ngCordova.plugins.actionSheet',
   'ngCordova.plugins.adMob',
   'ngCordova.plugins.appAvailability',
@@ -6537,9 +6690,9 @@ angular.module('ngCordova.plugins.spinnerDialog', [])
   .factory('$cordovaSpinnerDialog', ['$window', function ($window) {
 
     return {
-      show: function (title, message, fixed) {
+      show: function (title, message, fixed, iosOptions) {
         fixed = fixed || false;
-        return $window.plugins.spinnerDialog.show(title, message, fixed);
+        return $window.plugins.spinnerDialog.show(title, message, fixed, iosOptions);
       },
       hide: function () {
         return $window.plugins.spinnerDialog.hide();
@@ -6797,6 +6950,16 @@ angular.module('ngCordova.plugins.toast', [])
       showLongBottom: function (message) {
         var q = $q.defer();
         $window.plugins.toast.showLongBottom(message, function (response) {
+          q.resolve(response);
+        }, function (error) {
+          q.reject(error);
+        });
+        return q.promise;
+      },
+
+      showWithOptions: function (options) {
+        var q = $q.defer();
+        $window.plugins.toast.showWithOptions(options, function (response) {
           q.resolve(response);
         }, function (error) {
           q.reject(error);

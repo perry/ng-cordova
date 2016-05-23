@@ -48,10 +48,29 @@ ngCordovaMocks.factory('$cordovaAppVersion', ['$q', function ($q) {
   var throwsError = false;
   return {
     throwsError: throwsError,
-    getAppVersion: function () {
-      var defer = $q.defer();
-      defer.resolve('mock v');
-      return defer.promise;
+
+    getAppName: function () {
+      var q = $q.defer();
+      q.resolve('mock app name');
+      return q.promise;
+    },
+
+    getPackageName: function () {
+      var q = $q.defer();
+      q.resolve('com.package.mock');
+      return q.promise;
+    },
+
+    getVersionNumber: function () {
+      var q = $q.defer();
+      q.resolve('1.2.3');
+      return q.promise;
+    },
+
+    getVersionCode: function () {
+      var q = $q.defer();
+      q.resolve('4.5.6');
+      return q.promise;
     }
   };
 }]);
@@ -3339,6 +3358,15 @@ ngCordovaMocks.factory('$cordovaToast', ['$q', function ($q) {
       }
       return defer.promise;
     },
+    showWithOptions: function (options) {
+      var defer = $q.defer();
+      if (this.throwsError) {
+        defer.reject('There was an error showing the toast.');
+      } else {
+        defer.resolve();
+      }
+      return defer.promise;
+		},
     show: function (message, duration, position) {
       var defer = $q.defer();
       if (this.throwsError) {
